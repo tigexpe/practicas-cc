@@ -9,7 +9,7 @@ import logging
 import os
 import socket
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime
 
 from fastapi import Depends, FastAPI, Query, status
 from pydantic import BaseModel
@@ -17,7 +17,7 @@ from sqlalchemy import DateTime, Integer, String, Text, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./analytics.db")
+DATABASE_URL = os.environ["DATABASE_URL"]
 REDIS_URL = os.getenv("REDIS_URL", "")
 CLICK_STREAM = os.getenv("CLICK_STREAM", "clicks")
 CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "analytics")
@@ -170,10 +170,6 @@ async def link_stats(code: str, session: AsyncSession = Depends(get_session)):
         .limit(5)
     )
 
-    if isinstance(last, str):  # SQLite devuelve texto en agregados
-        last = datetime.fromisoformat(last)
-    if last is not None and last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
 
     return LinkStats(
         code=code,

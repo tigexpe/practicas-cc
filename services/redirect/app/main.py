@@ -23,7 +23,7 @@ state: dict = {}
 
 
 class MemoryCache:
-    """Caché de respaldo para ejecutar sin Redis (modo local)."""
+    """Caché de respaldo para ejecutar sin Redis."""
 
     def __init__(self):
         self._data: dict[str, tuple[float, str]] = {}

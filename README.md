@@ -1,4 +1,4 @@
-# Acortador de enlaces — FastAPI + microservicios
+# CloudLink — acortador de enlaces con FastAPI y microservicios
 
 ```
                     ┌──────────────┐
@@ -29,21 +29,8 @@
 docker compose up --build
 ```
 
-Abre http://localhost:8000. Para otro dominio público: `PUBLIC_BASE_URL=https://mi.dominio docker compose up`.
+Abre http://localhost:8000. Para cambiar credenciales o dominio, copia `.env.example` a `.env` y edítalo antes del primer arranque.
 
-## Arrancar en local sin Docker
-
-Usa SQLite y envía los eventos por HTTP en lugar de Redis.
-
-```powershell
-.\run_local.ps1
-```
-
-```powershell
-.\run_local.ps1 -Stop
-```
-
-> En modo local la caché de redirect es en memoria: un enlace borrado puede seguir redirigiendo hasta que caduque la caché (1 h) o reinicies los servicios. Con Redis (Docker) se invalida al instante.
 
 ## API (a través del gateway)
 
@@ -58,4 +45,4 @@ Usa SQLite y envía los eventos por HTTP en lugar de Redis.
 | `GET` | `/api/stats/{code}` | Clics totales, por día y referrers |
 | `GET` | `/health` | Estado de todos los servicios |
 
-Cada servicio expone además su propia documentación OpenAPI en `/docs` (puertos 8001–8003 en local).
+Cada servicio expone además su documentación OpenAPI en `/docs`, accesible solo desde la red interna de compose salvo la del gateway.
