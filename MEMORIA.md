@@ -14,17 +14,18 @@
 1. [Resumen](#1-resumen)
 2. [Objetivos y requisitos](#2-objetivos-y-requisitos)
 3. [Arquitectura](#3-arquitectura)
-4. [Microservicios](#4-microservicios)
-5. [Modelo de datos y eventos](#5-modelo-de-datos-y-eventos)
-6. [API](#6-api)
-7. [Contenerización](#7-contenerización)
-8. [Configuración](#8-configuración)
-9. [Pruebas y calidad](#9-pruebas-y-calidad)
-10. [Integración continua](#10-integración-continua)
-11. [Puesta en marcha](#11-puesta-en-marcha)
-12. [Decisiones de diseño](#12-decisiones-de-diseño)
-13. [Limitaciones y trabajo futuro](#13-limitaciones-y-trabajo-futuro)
-14. [Anexo: estructura del repositorio](#14-anexo-estructura-del-repositorio)
+4. [Encuadre en la nube (NIST)](#4-encuadre-en-la-nube-nist)
+5. [Microservicios](#5-microservicios)
+6. [Modelo de datos y eventos](#6-modelo-de-datos-y-eventos)
+7. [API](#7-api)
+8. [Contenerización](#8-contenerización)
+9. [Configuración](#9-configuración)
+10. [Pruebas y calidad](#10-pruebas-y-calidad)
+11. [Integración continua](#11-integración-continua)
+12. [Puesta en marcha](#12-puesta-en-marcha)
+13. [Decisiones de diseño](#13-decisiones-de-diseño)
+14. [Limitaciones y trabajo futuro](#14-limitaciones-y-trabajo-futuro)
+15. [Anexo: estructura del repositorio](#15-anexo-estructura-del-repositorio)
 
 ## 1. Resumen
 
@@ -113,29 +114,53 @@ sequenceDiagram
 | GitHub Actions y GHCR | Integración continua y registro de imágenes |
 | pytest y ruff | Tests y análisis estático |
 
-## 4. Microservicios
+## 4. Encuadre en la nube (NIST)
 
-### 4.1 gateway (puerto 8000)
+Esta sección sitúa CloudLink en dos marcos de referencia del NIST: la definición de computación en la nube (SP 800-145) y la arquitectura de referencia con sus actores (SP 500-292).
+
+### 4.1 Características esenciales (NIST SP 800-145)
+
+| Característica | Cómo la materializa CloudLink |
+|---|---|
+| **Autoservicio bajo demanda** | El consumidor crea y gestiona enlaces por la API (`POST /api/links`) sin intervención humana del proveedor. |
+| **Acceso amplio a la red** | Todo se expone por HTTP a través del gateway, accesible desde clientes heterogéneos (navegador, curl, móvil). Cada servicio publica su especificación OpenAPI. |
+| **Agrupación de recursos** | Una única instancia multi-inquilino sirve los enlaces de todos los usuarios. PostgreSQL y Redis son recursos compartidos y reasignados entre peticiones. |
+| **Rápida elasticidad** | Los servicios son stateless. El camino caliente (redirect) escala de forma independiente (`docker compose up --scale redirect=N`) y la ingesta de analítica escala añadiendo consumidores al grupo. |
+| **Servicio medido** | El servicio analytics contabiliza cada clic (total, por día, referrers), por lo que el producto es un servicio medido por diseño. Además, el uso de recursos es monitorizable por contenedor. |
+
+### 4.2 Actores (NIST SP 500-292)
+
+| Actor | Quién lo encarna en CloudLink | Impacto económico |
+|---|---|---|
+| **Consumidor** | El usuario final que acorta y visita enlaces, y el equipo que opera el servicio. | Paga solo por el uso real, sin mantener servidores propios. |
+| **Proveedor** | La plataforma que aloja los contenedores: nube pública con capa gratuita o nube privada propia en los Hitos 3-5. En local, el host Docker hace de proveedor. | Pago por uso. El coste se controla escalando solo redirect y destruyendo la infraestructura fuera de laboratorio. |
+| **Intermediario (broker)** | GitHub Container Registry como distribución de imágenes. Un posible CDN delante de redirect actuaría también como intermediación. | Reduce la fricción de reparto. |
+| **Operador o portador (carrier)** | La conectividad de red (ISP, backbone) que transporta las peticiones. | Coste de tránsito y ancho de banda, sobre todo en la redirección. |
+| **Auditor** | La revisión de seguridad y cumplimiento: los análisis del CI (como ruff), la verificación de región UE/RGPD del Hito 4 y el propio alumno. | Previene costes por incidentes y sanciones. |
+
+## 5. Microservicios
+
+### 5.1 gateway (puerto 8000)
 
 Es la única entrada pública. Sirve la interfaz web, reenvía cada petición al servicio correspondiente y agrega el estado de todos en `/health`. Devuelve 503 si el servicio de destino no responde.
 
 La interfaz permite crear, copiar y borrar enlaces, y muestra los clics con un refresco cada 10 segundos.
 
-### 4.2 shortener (puerto 8001)
+### 5.2 shortener (puerto 8001)
 
 Es el propietario de los enlaces. Genera códigos de 7 caracteres base62 con el módulo `secrets`, lo que da 62⁷ ≈ 3,5 billones (10¹²) de combinaciones, y prueba hasta 5 candidatos si hay colisión. La unicidad la garantiza la clave primaria.
 
 Los alias admiten de 3 a 32 letras, números, `-` o `_`, salvo las palabras reservadas. Al borrar un enlace elimina su entrada de la caché.
 
-### 4.3 redirect (puerto 8002)
+### 5.3 redirect (puerto 8002)
 
 Resuelve un código y responde con 307 y `Cache-Control: no-store`, para que las visitas repetidas también lleguen al sistema y se cuenten. Busca primero en Redis y, si no lo encuentra, consulta a shortener. Publica el clic en una tarea en segundo plano.
 
-### 4.4 analytics (puerto 8003)
+### 5.4 analytics (puerto 8003)
 
 Consume el stream `clicks` dentro de un grupo de consumidores, en lotes de hasta 100 eventos. Confirma cada lote después de guardarlo, por lo que la entrega es *al menos una vez*. Calcula total, último clic, clics por día y los 5 referrers principales.
 
-## 5. Modelo de datos y eventos
+## 6. Modelo de datos y eventos
 
 **Tabla `links`** (base de datos de shortener)
 
@@ -175,7 +200,7 @@ Contenido de un evento:
 }
 ```
 
-## 6. API
+## 7. API
 
 Todas las rutas se consumen a través del gateway.
 
@@ -209,9 +234,9 @@ curl -X POST http://localhost:8000/api/links \
 
 Cada servicio genera su documentación OpenAPI en `/docs`. Desde el host solo es accesible la del gateway.
 
-## 7. Contenerización
+## 8. Contenerización
 
-### 7.1 Imágenes
+### 8.1 Imágenes
 
 Los cuatro Dockerfiles comparten una construcción multietapa:
 
@@ -227,7 +252,7 @@ Los `.dockerignore` excluyen cachés, bases de datos locales, entornos virtuales
 | `cloudlink-shortener` | 287 MB | 67,2 MB |
 | `cloudlink-analytics` | 287 MB | 67,2 MB |
 
-### 7.2 Orquestación
+### 8.2 Orquestación
 
 [docker-compose.yml](docker-compose.yml) define el proyecto `cloudlink` con seis contenedores:
 
@@ -237,7 +262,7 @@ Los `.dockerignore` excluyen cachés, bases de datos locales, entornos virtuales
 - **Persistencia:** volúmenes `cloudlink_pgdata` y `cloudlink_redisdata`; Redis usa además AOF.
 - **Inicialización:** [init.sql](infra/postgres/init.sql) crea la base de datos `analytics` la primera vez.
 
-## 8. Configuración
+## 9. Configuración
 
 Se lee del entorno o de un archivo `.env`, excluido de Git. La plantilla es [.env.example](.env.example).
 
@@ -252,7 +277,7 @@ Se lee del entorno o de un archivo `.env`, excluido de Git. La plantilla es [.en
 
 PostgreSQL aplica usuario, contraseña y base de datos solo al crear el volumen.
 
-## 9. Pruebas y calidad
+## 10. Pruebas y calidad
 
 | Servicio | Tests | Qué comprueban |
 |---|---|---|
@@ -277,7 +302,7 @@ Los 8 tests usan `TestClient` de FastAPI. Los de shortener y analytics se ejecut
 
 Estas comprobaciones se hicieron a mano, fuera de los tests automáticos. No se han realizado pruebas de carga.
 
-## 10. Integración continua
+## 11. Integración continua
 
 [ci.yml](.github/workflows/ci.yml) se ejecuta en push y pull request a `main` o `master`:
 
@@ -290,7 +315,7 @@ ghcr.io/tigexpe/practicas-cc/<servicio>:<sha>
 
 La [primera ejecución](https://github.com/tigexpe/practicas-cc/actions/runs/45494561185), del commit `fbcf4de`, terminó en verde en 1 min 31 s: 4 trabajos de test y 4 de publicación.
 
-## 11. Puesta en marcha
+## 12. Puesta en marcha
 
 Requiere Docker con Compose. Los comandos se ejecutan desde la raíz del repositorio, en Linux o WSL.
 
@@ -333,7 +358,7 @@ done
 docker stop cloudlink-test
 ```
 
-## 12. Decisiones de diseño
+## 13. Decisiones de diseño
 
 | Decisión | Motivo | Contrapartida |
 |---|---|---|
@@ -345,7 +370,7 @@ docker stop cloudlink-test
 | Gateway propio en FastAPI | Misma tecnología y control del enrutado | Menos funciones que un proxy especializado |
 | Etiqueta por SHA | Cada imagen se puede rastrear hasta su commit | No hay etiqueta `latest` ni de versión |
 
-## 13. Limitaciones y trabajo futuro
+## 14. Limitaciones y trabajo futuro
 
 **Seguridad**
 - No hay autenticación: cualquiera con acceso puede listar y borrar todos los enlaces.
@@ -364,7 +389,7 @@ docker stop cloudlink-test
 
 **Siguientes pasos:** autenticación, migraciones con Alembic, recuperación de eventos, tests de integración, observabilidad y despliegue en la nube.
 
-## 14. Anexo: estructura del repositorio
+## 15. Anexo: estructura del repositorio
 
 ```text
 .
