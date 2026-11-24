@@ -71,7 +71,7 @@ flowchart TD
     A --> P2[(PostgreSQL: analytics)]
 ```
 
-Solo el gateway publica un puerto en el host. Los demás contenedores se comunican por la red de Compose. Las dos bases de datos comparten servidor PostgreSQL, pero cada servicio accede únicamente a la suya.
+Solo el gateway publica un puerto en el host. Los demás contenedores se comunican por dos redes de Compose: `frontend` (gateway y servicios) y `backend` (servicios, PostgreSQL y Redis). La segunda es interna, por lo que el gateway no alcanza los almacenes de datos. Las dos bases de datos comparten servidor PostgreSQL, pero cada servicio accede únicamente a la suya.
 
 ### 3.1 Flujo de una redirección
 
@@ -360,7 +360,6 @@ docker stop cloudlink-test
 **Funcionalidad e infraestructura**
 - La lista de alias reservados no incluye `redoc`, ruta que el gateway ya utiliza.
 - La interfaz muestra clics solo de los 100 enlaces más visitados.
-- Compose usa una única red; no segmenta gateway, servicios y bases de datos.
 - Los tests no cubren Redis ni la redirección completa.
 
 **Siguientes pasos:** autenticación, migraciones con Alembic, recuperación de eventos, tests de integración, observabilidad y despliegue en la nube.
