@@ -3,6 +3,7 @@ name: cloudlink
 services:
   gateway:
     build: ./services/gateway
+    networks: [frontend]
     ports:
       - "8000:8000"
     environment:
@@ -20,6 +21,7 @@ services:
 
   shortener:
     build: ./services/shortener
+    networks: [frontend, backend]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/${POSTGRES_DB:-shortener}
       REDIS_URL: redis://redis:6379/0
@@ -38,6 +40,7 @@ services:
 
   redirect:
     build: ./services/redirect
+    networks: [frontend, backend]
     environment:
       SHORTENER_URL: http://shortener:8001
       REDIS_URL: redis://redis:6379/0
@@ -55,6 +58,7 @@ services:
 
   analytics:
     build: ./services/analytics
+    networks: [frontend, backend]
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@postgres:5432/analytics
       REDIS_URL: redis://redis:6379/0
@@ -71,6 +75,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
+    networks: [backend]
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-app}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
@@ -85,6 +90,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    networks: [backend]
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redisdata:/data
@@ -92,6 +98,13 @@ services:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       retries: 10
+
+networks:
+  # Gateway y servicios; única red con salida al exterior.
+  frontend:
+  # Servicios y almacenes de datos; sin acceso desde el gateway ni salida a Internet.
+  backend:
+    internal: true
 
 volumes:
   pgdata:
