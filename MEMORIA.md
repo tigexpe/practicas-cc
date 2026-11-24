@@ -4,8 +4,8 @@
 |---|---|
 | **Proyecto** | CloudLink, acortador de enlaces basado en microservicios |
 | **Asignatura** | Cloud Computing |
-| **Autoría** | _[nombre y apellidos]_ |
-| **Curso y fecha** | _[completar]_ |
+| **Autoría** | Daniel Barea |
+| **Fecha** | 24/11/2026 |
 | **Repositorio** | https://github.com/tigexpe/practicas-cc |
 | **Alcance** | Hitos 1 (aplicación) y 2 (contenedores e integración continua) |
 
