@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acortador de enlaces</title>
+  <style>
+    :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#6b7280; --line:#e5e7eb; --accent:#2563eb; --danger:#dc2626; }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0f1115; --card:#181b22; --text:#e7e9ee; --muted:#9aa3b2; --line:#2a2f3a; --accent:#60a5fa; --danger:#f87171; }
+    }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, sans-serif; background:var(--bg); color:var(--text); }
+    main { max-width: 760px; margin: 48px auto; padding: 0 16px; }
+    h1 { font-size: 1.6rem; margin: 0 0 4px; }
+    p.sub { color: var(--muted); margin: 0 0 24px; }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:20px; margin-bottom:20px; }
+    form { display:flex; gap:8px; flex-wrap:wrap; }
+    input { flex:1 1 240px; padding:10px 12px; border:1px solid var(--line); border-radius:8px; background:transparent; color:var(--text); font-size:1rem; }
+    input.alias { flex:0 1 160px; }
+    button { padding:10px 16px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+    button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); padding:6px 10px; font-weight:500; }
+    button.ghost.del:hover { color:var(--danger); border-color:var(--danger); }
+    .msg { margin-top:12px; min-height:1.2em; font-size:.95rem; }
+    .msg.err { color: var(--danger); }
+    .msg a { color: var(--accent); font-weight:600; }
+    table { width:100%; border-collapse:collapse; }
+    td, th { text-align:left; padding:10px 6px; border-bottom:1px solid var(--line); vertical-align:middle; }
+    th { color:var(--muted); font-weight:500; font-size:.85rem; }
+    td.url { max-width: 280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--muted); }
+    td.num { font-variant-numeric: tabular-nums; text-align:right; }
+    a.short { color:var(--accent); text-decoration:none; font-weight:600; }
+    .actions { display:flex; gap:6px; justify-content:flex-end; }
+    .empty { color:var(--muted); text-align:center; padding:20px; }
+    @media (max-width: 560px) { td.url { display:none; } th.url { display:none; } }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Acortador de enlaces</h1>
+  <p class="sub">FastAPI · microservicios: gateway, shortener, redirect y analytics</p>
+
+  <div class="card">
+    <form id="form">
+      <input id="url" type="url" placeholder="https://ejemplo.com/una/url/muy/larga" required>
+      <input id="alias" class="alias" placeholder="alias (opcional)">
+      <button type="submit">Acortar</button>
+    </form>
+    <div id="msg" class="msg"></div>
+  </div>
+
+  <div class="card">
+    <table>
+      <thead><tr><th>Enlace</th><th class="url">Destino</th><th style="text-align:right">Clics</th><th></th></tr></thead>
+      <tbody id="rows"><tr><td colspan="4" class="empty">Cargando…</td></tr></tbody>
+    </table>
+  </div>
+</main>
+<script>
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  async function load() {
+    try {
+      const [links, stats] = await Promise.all([
+        fetch('/api/links').then(r => r.json()),
+        fetch('/api/stats?limit=100').then(r => r.ok ? r.json() : []).catch(() => []),
+      ]);
+      const counts = Object.fromEntries(stats.map(s => [s.code, s.clicks]));
+      $('rows').innerHTML = links.length ? links.map(l => `
+        <tr>
+          <td><a class="short" href="/${esc(l.code)}" target="_blank" rel="noopener">/${esc(l.code)}</a></td>
+          <td class="url" title="${esc(l.url)}">${esc(l.url)}</td>
+          <td class="num">${counts[l.code] || 0}</td>
+          <td><div class="actions">
+            <button class="ghost" data-copy="${esc(l.short_url)}">Copiar</button>
+            <button class="ghost del" data-del="${esc(l.code)}">Borrar</button>
+          </div></td>
+        </tr>`).join('') : '<tr><td colspan="4" class="empty">Aún no hay enlaces</td></tr>';
+    } catch {
+      $('rows').innerHTML = '<tr><td colspan="4" class="empty">No se pudo cargar la lista</td></tr>';
+    }
+  }
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = { url: $('url').value.trim() };
+    const alias = $('alias').value.trim();
+    if (alias) body.custom_code = alias;
+    const msg = $('msg');
+    msg.className = 'msg'; msg.textContent = 'Creando…';
+    const r = await fetch('/api/links', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      msg.className = 'msg err';
+      msg.textContent = typeof data.detail === 'string' ? data.detail : 'URL no válida';
+      return;
+    }
+    msg.innerHTML = `Listo: <a href="${esc(data.short_url)}" target="_blank" rel="noopener">${esc(data.short_url)}</a>`;
+    $('form').reset();
+    load();
+  });
+
+  $('rows').addEventListener('click', async (e) => {
+    const copy = e.target.dataset.copy, del = e.target.dataset.del;
+    if (copy) {
+      await navigator.clipboard.writeText(copy);
+      e.target.textContent = '¡Copiado!';
+      setTimeout(() => e.target.textContent = 'Copiar', 1200);
+    } else if (del && confirm(`¿Borrar /${del}?`)) {
+      await fetch(`/api/links/${encodeURIComponent(del)}`, { method: 'DELETE' });
+      load();
+    }
+  });
+
+  load();
+  setInterval(load, 10000);
+</script>
+</body>
+</html>
