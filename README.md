@@ -1,48 +1,38 @@
-# CloudLink — acortador de enlaces con FastAPI y microservicios
+# CloudLink
 
-```
-                    ┌──────────────┐
-   navegador ─────▶ │   gateway    │ :8000  (frontend + enrutado)
-                    └──────┬───────┘
-         /api/links        │ /{code}           /api/stats
-      ┌────────────────────┼──────────────────────┐
-      ▼                    ▼                      ▼
-┌───────────┐  HTTP  ┌───────────┐          ┌───────────┐
-│ shortener │◀───────│ redirect  │          │ analytics │
-│   :8001   │        │   :8002   │          │   :8003   │
-└─────┬─────┘        └─────┬─────┘          └─────┬─────┘
-      │                    │ caché + XADD         │ XREADGROUP
-      ▼                    ▼                      ▼
- Postgres (db shortener)   Redis  ── stream "clicks" ──▶  Postgres (db analytics)
-```
+Acortador de enlaces cloud-native: acorta URLs, redirige con baja latencia y mide
+el uso de cada enlace. Arquitectura de microservicios (FastAPI) sobre contenedores,
+con PostgreSQL y Redis.
 
-| Servicio | Responsabilidad |
-|---|---|
-| **gateway** | Único punto público. Sirve la web y hace de proxy a los demás servicios. `/health` agrega el estado de todos. |
-| **shortener** | Dueño de los enlaces: crear (código aleatorio o alias), listar, consultar, borrar. Base de datos propia. |
-| **redirect** | Ruta caliente: resuelve `/{code}` con caché en Redis y redirige (307). Publica un evento de clic sin bloquear la respuesta. Escalable con `--scale redirect=N`. |
-| **analytics** | Consume el stream `clicks` como grupo de consumidores, guarda los clics y expone estadísticas (total, por día, referrers). |
+[![CI](https://github.com/tigexpe/practicas-cc/actions/workflows/ci.yml/badge.svg)](https://github.com/tigexpe/practicas-cc/actions/workflows/ci.yml)
 
-## Arrancar con Docker
+**Estado:** Hitos 1 y 2 completados — aplicación, contenerización e integración continua.
 
-```powershell
-docker compose up --build
+## Puesta en marcha
+
+Requiere Docker con Compose.
+
+```bash
+cp .env.example .env      # ajusta POSTGRES_PASSWORD
+docker compose up -d --build
 ```
 
-Abre http://localhost:8000. Para cambiar credenciales o dominio, copia `.env.example` a `.env` y edítalo antes del primer arranque.
+Interfaz en http://localhost:8000
 
+Para parar:
 
-## API (a través del gateway)
+```bash
+docker compose down       # detiene y conserva los datos
+docker compose down -v    # detiene y BORRA los datos (volúmenes)
+```
 
-| Método | Ruta | Descripción |
-|---|---|---|
-| `POST` | `/api/links` | `{"url": "...", "custom_code": "opcional"}` → 201 con `short_url` |
-| `GET` | `/api/links` | Lista (`?limit=&offset=`) |
-| `GET` | `/api/links/{code}` | Detalle |
-| `DELETE` | `/api/links/{code}` | Borra (204) |
-| `GET` | `/{code}` | Redirige al destino (307) |
-| `GET` | `/api/stats` | Enlaces más visitados |
-| `GET` | `/api/stats/{code}` | Clics totales, por día y referrers |
-| `GET` | `/health` | Estado de todos los servicios |
+## Documentación
 
-Cada servicio expone además su documentación OpenAPI en `/docs`, accesible solo desde la red interna de compose salvo la del gateway.
+Toda la documentación del proyecto (dominio, encuadre NIST, arquitectura, API,
+decisiones de diseño y limitaciones) está en **[MEMORIA.md](MEMORIA.md)**.
+
+Archivos clave: [`docker-compose.yml`](docker-compose.yml) · [`.github/workflows/ci.yml`](.github/workflows/ci.yml) · [`.env.example`](.env.example)
+
+## Stack
+
+Python 3.12 · FastAPI · PostgreSQL 16 · Redis 7 · Docker Compose · GitHub Actions + GHCR

@@ -281,12 +281,12 @@ PostgreSQL aplica usuario, contraseña y base de datos solo al crear el volumen.
 
 | Servicio | Tests | Qué comprueban |
 |---|---|---|
-| shortener | 2 | Crear, consultar y borrar; alias duplicado |
+| shortener | 10 | Crear, consultar y borrar; alias válido, duplicado, con formato inválido y reservado |
 | analytics | 1 | Ingesta de un evento y estadísticas resultantes |
 | redirect | 2 | `/health` y raíz sin ruta (404) |
 | gateway | 3 | Interfaz en la raíz y `/health` sano y degradado |
 
-Los 8 tests usan `TestClient` de FastAPI. Los de shortener y analytics se ejecutan contra PostgreSQL, y todos sin Redis. El análisis estático se hace con `ruff check services`.
+Los 16 tests usan `TestClient` de FastAPI. Los de shortener y analytics se ejecutan contra PostgreSQL, y todos sin Redis. El análisis estático se hace con `ruff check services`.
 
 **Verificación de extremo a extremo.** El 24/11/2026 se levantó el sistema con Docker en WSL, con los seis contenedores en estado `healthy`:
 
@@ -378,12 +378,13 @@ docker stop cloudlink-test
 - La contraseña de PostgreSQL tiene un valor por defecto y Redis no usa contraseña.
 
 **Robustez**
+- Si Redis deja de responder, la redirección falla, porque la lectura de la caché no captura ese error.
+- El `/health` de cada servicio no comprueba PostgreSQL ni Redis.
 - Los eventos pendientes se recuperan solo al arrancar un consumidor con el mismo nombre. El nombre por defecto es el del contenedor, así que recrearlo puede dejar eventos sin procesar; se resolvería con `XAUTOCLAIM`.
 - Un evento puede perderse si Redis falla al publicarlo o contarse dos veces si analytics cae antes de confirmarlo.
 - Las tablas se crean al arrancar, sin migraciones versionadas.
 
 **Funcionalidad e infraestructura**
-- La lista de alias reservados no incluye `redoc`, ruta que el gateway ya utiliza.
 - La interfaz muestra clics solo de los 100 enlaces más visitados.
 - Los tests no cubren Redis ni la redirección completa.
 
