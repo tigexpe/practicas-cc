@@ -26,6 +26,19 @@ def test_create_get_delete(client):
     assert client.get(f"/links/{code}").status_code == 404
 
 
+def test_valid_alias(client):
+    alias = f"Mi_charla-{uuid4().hex[:8]}"
+    created = client.post("/links", json={"url": "https://example.com", "custom_code": alias})
+    assert created.status_code == 201
+    assert created.json()["code"] == alias
+
+
+@pytest.mark.parametrize("alias", ["", "ab", "a" * 33, "con espacio", "abc\n", "redoc", "API"])
+def test_invalid_or_reserved_alias(client, alias):
+    resp = client.post("/links", json={"url": "https://example.com", "custom_code": alias})
+    assert resp.status_code == 422
+
+
 def test_duplicate_alias(client):
     body = {"url": "https://example.com", "custom_code": f"t-{uuid4().hex[:8]}"}
     assert client.post("/links", json=body).status_code == 201

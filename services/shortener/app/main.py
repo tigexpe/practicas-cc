@@ -22,8 +22,8 @@ REDIS_URL = os.getenv("REDIS_URL", "")
 CODE_LENGTH = int(os.getenv("CODE_LENGTH", "7"))
 
 ALPHABET = string.ascii_letters + string.digits
-CUSTOM_CODE_RE = re.compile(r"^[A-Za-z0-9_-]{3,32}$")
-RESERVED_CODES = {"api", "health", "static", "docs", "openapi.json", "favicon.ico"}
+CUSTOM_CODE_RE = re.compile(r"[A-Za-z0-9_-]{3,32}")
+RESERVED_CODES = {"api", "health", "static", "docs", "redoc", "openapi.json", "favicon.ico"}
 
 engine = create_async_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
@@ -103,9 +103,9 @@ async def health():
 async def create_link(payload: LinkCreate, session: AsyncSession = Depends(get_session)):
     url = str(payload.url)
 
-    if payload.custom_code:
+    if payload.custom_code is not None:
         code = payload.custom_code
-        if not CUSTOM_CODE_RE.match(code) or code.lower() in RESERVED_CODES:
+        if not CUSTOM_CODE_RE.fullmatch(code) or code.lower() in RESERVED_CODES:
             raise HTTPException(422, "Alias inválido: usa 3-32 letras, números, '-' o '_'")
         candidates = [code]
     else:
@@ -120,7 +120,7 @@ async def create_link(payload: LinkCreate, session: AsyncSession = Depends(get_s
         except IntegrityError:
             await session.rollback()
 
-    if payload.custom_code:
+    if payload.custom_code is not None:
         raise HTTPException(409, "Ese alias ya está en uso")
     raise HTTPException(500, "No se pudo generar un código único")
 
